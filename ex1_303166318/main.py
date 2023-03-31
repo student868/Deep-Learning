@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 BATCH_SIZE = 64
 PRINT_EVERY = 100
-EPOCHS = 100
+EPOCHS = 20
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 

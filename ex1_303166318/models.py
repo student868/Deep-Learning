@@ -17,7 +17,6 @@ class Lenet5(nn.Module):
         self.S5 = nn.Linear(in_features=400, out_features=120)
         self.S6 = nn.Linear(in_features=120, out_features=84)
         self.S7 = nn.Linear(in_features=84, out_features=10)
-        self.softmax = nn.Softmax(dim=0)
 
     def forward(self, x):
         x = self.C1(x)
@@ -32,7 +31,6 @@ class Lenet5(nn.Module):
         x = self.S6(x)
         x = ACTIVATION(x)
         x = self.S7(x)
-        x = self.softmax(x)
         return x
 
 
@@ -50,7 +48,6 @@ class Lenet5Dropout(nn.Module):
         self.S6 = nn.Linear(in_features=120, out_features=84)
         self.D6 = nn.Dropout(DROPOUT)
         self.S7 = nn.Linear(in_features=84, out_features=10)
-        self.softmax = nn.Softmax(dim=0)
 
     def forward(self, x):
         x = self.C1(x)
@@ -67,7 +64,6 @@ class Lenet5Dropout(nn.Module):
         x = self.D6(x)
         x = ACTIVATION(x)
         x = self.S7(x)
-        x = self.softmax(x)
         return x
 
 
@@ -87,7 +83,6 @@ class Lenet5BatchNorm(nn.Module):
         self.S6 = nn.Linear(in_features=120, out_features=84)
         self.B6 = nn.BatchNorm1d(84)
         self.S7 = nn.Linear(in_features=84, out_features=10)
-        self.softmax = nn.Softmax(dim=0)
 
     def forward(self, x):
         x = self.C1(x)
@@ -106,5 +101,4 @@ class Lenet5BatchNorm(nn.Module):
         x = self.B6(x)
         x = ACTIVATION(x)
         x = self.S7(x)
-        x = self.softmax(x)
         return x
