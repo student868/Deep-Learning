@@ -1,5 +1,3 @@
-# We used the pytorch Quickstart guide: https://pytorch.org/tutorials/beginner/basics/quickstart_tutorial.html
-
 # TODO add ID
 import os.path
 
@@ -14,7 +12,9 @@ import matplotlib.pyplot as plt
 
 BATCH_SIZE = 64
 PRINT_EVERY = 100
-EPOCHS = 20
+EPOCHS = 1
+MODELS_DIR = 'models'
+PLOTS_DIR = 'plots'
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -45,11 +45,14 @@ def load_data():
 
 def plot_model(model, train_list, test_list):
     plt.title(model.name + ' accuracy')
-    plt.plot(train_list, 'blue', label='Train data accuracy')
-    plt.plot(test_list, 'red', label='Test data accuracy')
+    x = [i + 1 for i in range(EPOCHS)]
+    plt.plot(x, train_list, 'blue', label='Train data accuracy')
+    plt.plot(x, test_list, 'red', label='Test data accuracy')
     plt.legend(loc='upper left')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
+    plt.ylim([75, 100])
+    plt.savefig(os.path.join(PLOTS_DIR, model.name + '.png'))
     plt.show()
 
 
@@ -59,9 +62,9 @@ def evaluate_model(train_dataloader, test_dataloader, model, loss_fn, optimizer,
     train_correct_list = []
     test_correct_list = []
 
-    if use_saved_weights and os.path.exists(model.name + '.pkl'):
+    if use_saved_weights and os.path.exists(os.path.join(MODELS_DIR, model.name + '.pkl')):
         print('Loading old weights...')
-        model.load_state_dict(torch.load(model.name + '.pkl'))
+        model.load_state_dict(torch.load(os.path.join(MODELS_DIR, model.name + '.pkl')))
         train_correct, _ = test(device, train_dataloader, model, loss_fn)
         test_correct, _ = test(device, test_dataloader, model, loss_fn)
         print(f"Loaded Model - Train Accuracy: {train_correct * 100 :>0.1f}%, Test Accuracy: {test_correct * 100:>0.1f}%")
@@ -79,7 +82,7 @@ def evaluate_model(train_dataloader, test_dataloader, model, loss_fn, optimizer,
             print(f"Epoch {t + 1} - Train Accuracy: {train_correct :>0.1f}%, Test Accuracy: {test_correct :>0.1f}%")
 
         # Save the Model
-        torch.save(model.state_dict(), model.name + '.pkl')
+        torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '.pkl'))
 
         # Plot the Model
         plot_model(model, train_correct_list, test_correct_list)
