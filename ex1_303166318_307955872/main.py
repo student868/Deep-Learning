@@ -1,6 +1,4 @@
-# TODO add ID
 import os.path
-
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -11,8 +9,8 @@ from trainer import train, test
 import matplotlib.pyplot as plt
 
 BATCH_SIZE = 64
-PRINT_EVERY = 100
-EPOCHS = 1
+PRINT_EVERY = 5
+EPOCHS = 50
 MODELS_DIR = 'models'
 PLOTS_DIR = 'plots'
 
@@ -43,8 +41,14 @@ def load_data():
     return train_dataloader, test_dataloader
 
 
-def plot_model(model, train_list, test_list):
-    plt.title(model.name + ' accuracy')
+def plot_model(model, train_list, test_list, optimizer):
+    plt.suptitle(model.name + ' accuracy')
+    plt.title(
+        str(type(optimizer).__name__) + ' - '
+                                        ' LR:' + str(optimizer.defaults['lr']) +
+        ', Momentum:' + str(optimizer.defaults['momentum']) +
+        ', WD:' + str(optimizer.defaults['weight_decay'])
+    )
     x = [i + 1 for i in range(EPOCHS)]
     plt.plot(x, train_list, 'blue', label='Train data accuracy')
     plt.plot(x, test_list, 'red', label='Test data accuracy')
@@ -79,13 +83,14 @@ def evaluate_model(train_dataloader, test_dataloader, model, loss_fn, optimizer,
             test_correct, _ = test(device, test_dataloader, model, loss_fn)
             test_correct *= 100
             test_correct_list.append(test_correct)
-            print(f"Epoch {t + 1} - Train Accuracy: {train_correct :>0.1f}%, Test Accuracy: {test_correct :>0.1f}%")
+            if t % PRINT_EVERY == 0 or t == EPOCHS - 1:
+                print(f"Epoch {t + 1} - Train Accuracy: {train_correct :>0.1f}%, Test Accuracy: {test_correct :>0.1f}%")
 
         # Save the Model
-        torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '.pkl'))
+        # torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '.pkl'))
 
         # Plot the Model
-        plot_model(model, train_correct_list, test_correct_list)
+        plot_model(model, train_correct_list, test_correct_list, optimizer)
 
     print()
 
@@ -93,36 +98,35 @@ def evaluate_model(train_dataloader, test_dataloader, model, loss_fn, optimizer,
 def train_original(train_dataloader, test_dataloader, use_saved_weights):
     loss_fn = nn.CrossEntropyLoss()
     model = Lenet5().to(device)
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0009, momentum=0.995)
     evaluate_model(train_dataloader, test_dataloader, model, loss_fn, optimizer, use_saved_weights)
 
 
 def train_dropout(train_dataloader, test_dataloader, use_saved_weights):
     loss_fn = nn.CrossEntropyLoss()
     model = Lenet5Dropout().to(device)
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.995)
     evaluate_model(train_dataloader, test_dataloader, model, loss_fn, optimizer, use_saved_weights)
 
 
 def train_weight_decay(train_dataloader, test_dataloader, use_saved_weights):
     loss_fn = nn.CrossEntropyLoss()
     model = Lenet5()
-    model.name = 'Lenet5 with weight decay'
+    model.name = 'Lenet5 Weight Decay'
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), weight_decay=0.00001)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.99, weight_decay=0.0001)
     evaluate_model(train_dataloader, test_dataloader, model, loss_fn, optimizer, use_saved_weights)
 
 
 def train_batch_normalization(train_dataloader, test_dataloader, use_saved_weights):
     loss_fn = nn.CrossEntropyLoss()
     model = Lenet5BatchNorm().to(device)
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0011, momentum=0.98)
     evaluate_model(train_dataloader, test_dataloader, model, loss_fn, optimizer, use_saved_weights)
 
 
 def main():
     train_dataloader, test_dataloader = load_data()
-
     train_original(train_dataloader, test_dataloader, use_saved_weights=True)
     train_dropout(train_dataloader, test_dataloader, use_saved_weights=True)
     train_weight_decay(train_dataloader, test_dataloader, use_saved_weights=True)
