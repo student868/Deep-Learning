@@ -1,16 +1,13 @@
 <h1>Deep Learning - Ex.1</h1>
 
-We used the pytorch Quickstart guide: https://pytorch.org/tutorials/beginner/basics/quickstart_tutorial.html
+We used the pytorch [Quickstart guide](https://pytorch.org/tutorials/beginner/basics/quickstart_tutorial.html).
 
-The code is written using pytorch and is divided to 3 files:
-
-- main.py
-- models.py
-- trainer.py
+The code is written using pytorch and is divided to several files:
 
 <b>notebook.ipynb </b> - Jupyter notebook for calling functions from main.py. Usage:
 
-1. Load the data.
+1. Load the data
+- <b>Notice:</b> scipts, models and data are downloaded from our Github, because mounting from google drive on a shared folder made us problems, nevertheless, all the files are identical to those in the drive if you want to copy them and mount (you can verify that the last commit was made before the submission date).
 2. Train / evaluate saved model by running one of the following functions as instructed:
 
 - train_original
