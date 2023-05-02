@@ -1,25 +1,24 @@
-import math
 import os.path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import nn
-from torch.nn.utils import clip_grad_norm_
 
-from models import RNN
+from trainer import RNN, train, test, BATCH_SIZE
 
-BATCH_SIZE = 20
-PRINT_EVERY = 5
-EPOCHS = 3  # 13
-SEQUENCE_LENGTH = 35
-HIDDEN_UNITS = 200
-NUM_LAYERS = 2
-EMBEDDING_SIZE = 128
+# ---------------- constants ----------------
+EPOCHS = 13
+LR = 1
+LR_DECREASE_START_EPOCH = 7
+LR_DECREASE_FACTOR = 2
+DROPOUT = 0.2
+
 DATA_DIR = 'data'
 MODELS_DIR = 'models'
 PLOTS_DIR = 'plots'
-LR = 0.002
+
+# -------------------------------------------------
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -49,109 +48,74 @@ def load_data(root):
     return batch_data(train_data), batch_data(valid_data), batch_data(test_data), len(train_vocabulary)
 
 
-class RNN(nn.Module):
-    def __init__(self, rnn_type, vocabulary_size: int, dropout: float = 0):
-        super().__init__()
-        self.name = rnn_type.__name__
-        if dropout > 0:
-            self.name += ' with dropout ' + str(dropout)
-
-        self.embedding = nn.Embedding(vocabulary_size, EMBEDDING_SIZE)
-        self.rnn = rnn_type(input_size=EMBEDDING_SIZE, hidden_size=HIDDEN_UNITS, num_layers=NUM_LAYERS, dropout=dropout, batch_first=True)
-        self.fc = nn.Linear(HIDDEN_UNITS, vocabulary_size)
-
-    def forward(self, x, h):
-        x = self.embedding(x)
-        out, (h, c) = self.rnn(x, h)
-        out = out.reshape(out.size(0) * out.size(1), out.size(2))
-        y = self.fc(out)
-        return y, (h, c)
-
-
-def detach(states):
-    return [state.detach() for state in states]
-
-
-def train(model, data):
-    num_batches = data.size(1) // SEQUENCE_LENGTH
-
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-
-    for epoch in range(EPOCHS):
-        # Set initial hidden and cell states
-        states = (torch.zeros(NUM_LAYERS, BATCH_SIZE, HIDDEN_UNITS).to(device),
-                  torch.zeros(NUM_LAYERS, BATCH_SIZE, HIDDEN_UNITS).to(device))
-
-        for i in range(0, data.size(1) - SEQUENCE_LENGTH, SEQUENCE_LENGTH):
-            # Get mini-batch inputs and targets
-            inputs = data[:, i:i + SEQUENCE_LENGTH].to(device)
-            targets = data[:, (i + 1):(i + 1) + SEQUENCE_LENGTH].to(device)
-
-            # Forward pass
-            # Starting each batch, we detach the hidden state from how it was previously produced.
-            # If we didn't, the model would try backpropagating all the way to start of the dataset.
-            states = detach(states)
-            outputs, states = model(inputs, states)
-            loss = criterion(outputs, targets.reshape(-1))
-
-            # Backward and optimize
-            model.zero_grad()
-            loss.backward()
-            clip_grad_norm_(model.parameters(), 0.5)
-            optimizer.step()
-
-            step = (i + 1) // SEQUENCE_LENGTH
-            if step % 500 == 0:
-                print('Epoch [{}/{}], Step[{}/{}], Loss: {:.4f}, Perplexity: {:5.2f}'
-                      .format(epoch + 1, EPOCHS, step, num_batches, loss.item(), np.exp(loss.item())))
-
-
-def test(model, test_ids, num_layers, batch_size, hidden_size):
-    criterion = nn.CrossEntropyLoss()
-    test_num_batches = test_ids.size(1) // SEQUENCE_LENGTH
-
-    # Test the model
-    states = (torch.zeros(num_layers, batch_size, hidden_size).to(device),
-              torch.zeros(num_layers, batch_size, hidden_size).to(device))
-    test_loss = 0.
-    with torch.no_grad():
-        for i in range(0, test_ids.size(1) - SEQUENCE_LENGTH, SEQUENCE_LENGTH):
-            # Get mini-batch inputs and targets
-            inputs = test_ids[:, i:i + SEQUENCE_LENGTH].to(device)
-            targets = test_ids[:, (i + 1):(i + 1) + SEQUENCE_LENGTH].to(device)
-
-            # Forward pass
-            states = detach(states)
-            outputs, states = model(inputs, states)
-            test_loss += criterion(outputs, targets.reshape(-1)).item()
-
-    test_loss = test_loss / test_num_batches
-    print('-' * 89)
-    print('test loss {:5.2f} | test ppl {:8.2f}'.format(
-        test_loss, math.exp(test_loss)))
-    print('-' * 89)
-
-
-def plot_model(model, train_list, test_list, optimizer):
-    plt.suptitle(model.name + ' accuracy')
-    plt.title(str(type(optimizer).__name__))
-    x = [i + 1 for i in range(EPOCHS)]
-    plt.plot(x, train_list, 'blue', label='Train data accuracy')
-    plt.plot(x, test_list, 'red', label='Test data accuracy')
-    plt.legend(loc='upper left')
+def plot_model(model, train_list, test_list):
+    plt.title(model.name)
+    x = [i + 1 for i in range(len(train_list))]
+    plt.plot(x, train_list, 'blue', label='Train')
+    plt.plot(x, test_list, 'red', label='Test')
+    plt.legend(loc='upper right')
     plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.ylim([75, 100])
+    plt.ylabel('Perplexity')
+    plt.ylim([0, 1000])
     plt.savefig(os.path.join(PLOTS_DIR, model.name + '.png'))
     plt.show()
 
 
+def evaluate_model(train_data, valid_data, test_data, model, use_saved_weights):
+    print(' -- ' + model.name + ' -- ')
+
+    if use_saved_weights and os.path.exists(os.path.join(MODELS_DIR, model.name + '.pkl')):
+        print('Loading old weights...')
+        model.load_state_dict(torch.load(os.path.join(MODELS_DIR, model.name + '.pkl')))
+        print('Loaded Model - Train Perplexity: {:5.2f}, Validation Perplexity: {:5.2f}'.format(
+            test(device, model, train_data),
+            test(device, model, test_data)
+        ))
+
+    else:
+        print('Training Model...')
+
+        lr = LR
+        optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+        loss_fn = nn.CrossEntropyLoss()
+
+        train_list = []
+        test_list = []
+
+        for epoch in range(EPOCHS):
+            # changed LR according to epoch (from the paper)
+            if epoch >= LR_DECREASE_START_EPOCH:
+                for param_group in optimizer.param_groups:
+                    lr /= LR_DECREASE_FACTOR
+                    param_group['lr'] = lr
+
+            train(device, model, train_data, loss_fn, optimizer)
+            train_list.append(test(device, model, train_data))
+            test_list.append(test(device, model, test_data))
+
+            print('Epoch [{}/{}], LR: {:8.6f}, Train Perplexity: {:5.2f}, Validation Perplexity: {:5.2f}'.format(
+                epoch + 1, EPOCHS, lr,
+                train_list[-1],
+                test(device, model, valid_data)
+            ))
+
+        # Save the Model
+        torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '.pkl'))  # TODO
+
+        # Plot the Model
+        plot_model(model, train_list, test_list)
+
+    print()
+
+
 def main():
     train_data, valid_data, test_data, vocabulary_size = load_data(DATA_DIR)
-    model = RNN(nn.LSTM, vocabulary_size).to(device)
-    train(model, train_data)
-    test(model, valid_data, NUM_LAYERS, BATCH_SIZE, HIDDEN_UNITS)
+
+    evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size).to(device), use_saved_weights=True)
+    evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size, DROPOUT).to(device), use_saved_weights=True)
+
+    evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size).to(device), use_saved_weights=True)
+    evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size, DROPOUT).to(device), use_saved_weights=True)
 
 
 if __name__ == '__main__':
