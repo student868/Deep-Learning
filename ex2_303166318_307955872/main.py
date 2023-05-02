@@ -15,7 +15,7 @@ EPOCHS = 3  # 13
 SEQUENCE_LENGTH = 35
 HIDDEN_UNITS = 200
 NUM_LAYERS = 2
-EMBEDDING_LENGTH = 128
+EMBEDDING_SIZE = 128
 DATA_DIR = 'data'
 MODELS_DIR = 'models'
 PLOTS_DIR = 'plots'
@@ -31,6 +31,10 @@ def load_data(root):
         words = list(filter(None, words))
         return words
 
+    def batch_data(data):
+        data = np.array(data[:(len(data) // BATCH_SIZE) * BATCH_SIZE]).reshape((BATCH_SIZE, -1))
+        return torch.from_numpy(data).long()
+
     train_data = read_file(os.path.join(root, 'ptb.train.txt'))
     valid_data = read_file(os.path.join(root, 'ptb.valid.txt'))
     test_data = read_file(os.path.join(root, 'ptb.test.txt'))
@@ -42,19 +46,23 @@ def load_data(root):
     valid_data = [wordToIndex[word] for word in valid_data]
     test_data = [wordToIndex[word] for word in test_data]
 
-    return train_data, valid_data, test_data, len(train_vocabulary)
+    return batch_data(train_data), batch_data(valid_data), batch_data(test_data), len(train_vocabulary)
 
 
 class RNN(nn.Module):
-    def __init__(self, vocabulary_size):
+    def __init__(self, rnn_type, vocabulary_size: int, dropout: float = 0):
         super().__init__()
-        self.embedding = nn.Embedding(vocabulary_size, EMBEDDING_LENGTH)
-        self.lstm = nn.LSTM(EMBEDDING_LENGTH, HIDDEN_UNITS, NUM_LAYERS, batch_first=True)
+        self.name = rnn_type.__name__
+        if dropout > 0:
+            self.name += ' with dropout ' + str(dropout)
+
+        self.embedding = nn.Embedding(vocabulary_size, EMBEDDING_SIZE)
+        self.rnn = rnn_type(input_size=EMBEDDING_SIZE, hidden_size=HIDDEN_UNITS, num_layers=NUM_LAYERS, dropout=dropout, batch_first=True)
         self.fc = nn.Linear(HIDDEN_UNITS, vocabulary_size)
 
     def forward(self, x, h):
         x = self.embedding(x)
-        out, (h, c) = self.lstm(x, h)
+        out, (h, c) = self.rnn(x, h)
         out = out.reshape(out.size(0) * out.size(1), out.size(2))
         y = self.fc(out)
         return y, (h, c)
@@ -141,15 +149,9 @@ def plot_model(model, train_list, test_list, optimizer):
 
 def main():
     train_data, valid_data, test_data, vocabulary_size = load_data(DATA_DIR)
-    model = RNN(vocabulary_size).to(device)
-
-    train_data = np.array(train_data[:(len(train_data) // BATCH_SIZE) * BATCH_SIZE]).reshape((BATCH_SIZE, -1))
-    train_data_tensor = torch.from_numpy(train_data).long()
-    train(model, train_data_tensor)
-
-    valid_data = np.array(valid_data[:(len(valid_data) // BATCH_SIZE) * BATCH_SIZE]).reshape((BATCH_SIZE, -1))
-    valid_data_tensor = torch.from_numpy(valid_data).long()
-    test(model, valid_data_tensor, NUM_LAYERS, BATCH_SIZE, HIDDEN_UNITS)
+    model = RNN(nn.LSTM, vocabulary_size).to(device)
+    train(model, train_data)
+    test(model, valid_data, NUM_LAYERS, BATCH_SIZE, HIDDEN_UNITS)
 
 
 if __name__ == '__main__':
