@@ -8,12 +8,6 @@ from torch import nn
 from trainer import RNN, train, test, BATCH_SIZE
 
 # ---------------- constants ----------------
-EPOCHS = 13
-LR = 1
-LR_DECREASE_START_EPOCH = 7
-LR_DECREASE_FACTOR = 2
-DROPOUT = 0.2
-
 DATA_DIR = 'data'
 MODELS_DIR = 'models'
 PLOTS_DIR = 'plots'
@@ -48,62 +42,70 @@ def load_data(root):
     return batch_data(train_data), batch_data(valid_data), batch_data(test_data), len(train_vocabulary)
 
 
-def plot_model(model, train_list, test_list):
-    plt.title(model.name)
+def plot_model(model, train_list, test_list, lr):
+    plt.title(model.name + '(LR = ' + lr + ')')
     x = [i + 1 for i in range(len(train_list))]
     plt.plot(x, train_list, 'blue', label='Train')
     plt.plot(x, test_list, 'red', label='Test')
     plt.legend(loc='upper right')
     plt.xlabel('Epoch')
     plt.ylabel('Perplexity')
-    plt.ylim([0, 1000])
+    plt.ylim([0, 500])
     plt.savefig(os.path.join(PLOTS_DIR, model.name + '.png'))
     plt.show()
 
 
-def evaluate_model(train_data, valid_data, test_data, model, use_saved_weights):
+def nll_loss(scores, y):
+    probabilities = scores.exp() / scores.exp().sum(1, keepdim=True)
+    answerprobs = probabilities[range(len(y.reshape(-1))), y.reshape(-1)]
+    return torch.mean(-torch.log(answerprobs) * BATCH_SIZE)
+
+
+def evaluate_model(train_data, valid_data, test_data, model, epochs, lr_start: float, lr_decrease_start_epoch, lr_decrease_factor, sequence_length, use_saved_weights=True):
     print(' -- ' + model.name + ' -- ')
+    loss_fn = nll_loss
 
     if use_saved_weights and os.path.exists(os.path.join(MODELS_DIR, model.name + '.pkl')):
         print('Loading old weights...')
         model.load_state_dict(torch.load(os.path.join(MODELS_DIR, model.name + '.pkl')))
-        print('Loaded Model - Train Perplexity: {:5.2f}, Validation Perplexity: {:5.2f}'.format(
-            test(device, model, train_data),
-            test(device, model, test_data)
+        print('Loaded Model - Train Perplexity: {:5.2f}, validation Perplexity: {:5.2f}, test Perplexity: {:5.2f}'.format(
+            test(device, model, train_data, loss_fn, sequence_length),
+            test(device, model, valid_data, loss_fn, sequence_length),
+            test(device, model, test_data, loss_fn, sequence_length)
         ))
 
     else:
         print('Training Model...')
 
-        lr = LR
-        optimizer = torch.optim.SGD(model.parameters(), lr=lr)
-        loss_fn = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(model.parameters(), lr=lr_start)
+        lr = lr_start
+        # optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.99)
 
         train_list = []
         test_list = []
 
-        for epoch in range(EPOCHS):
-            # changed LR according to epoch (from the paper)
-            if epoch >= LR_DECREASE_START_EPOCH:
+        for epoch in range(epochs):
+            # changed LR according to epoch
+            if epoch >= lr_decrease_start_epoch:
                 for param_group in optimizer.param_groups:
-                    lr /= LR_DECREASE_FACTOR
+                    lr /= lr_decrease_factor
                     param_group['lr'] = lr
 
-            train(device, model, train_data, loss_fn, optimizer)
-            train_list.append(test(device, model, train_data))
-            test_list.append(test(device, model, test_data))
+            train(device, model, train_data, loss_fn, optimizer, sequence_length)
+            train_list.append(test(device, model, train_data, loss_fn, sequence_length))
+            test_list.append(test(device, model, test_data, loss_fn, sequence_length))
 
             print('Epoch [{}/{}], LR: {:8.6f}, Train Perplexity: {:5.2f}, Validation Perplexity: {:5.2f}'.format(
-                epoch + 1, EPOCHS, lr,
+                epoch + 1, epochs, lr,
                 train_list[-1],
-                test(device, model, valid_data)
+                test(device, model, valid_data, loss_fn, sequence_length)
             ))
 
         # Save the Model
         torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '.pkl'))  # TODO
 
         # Plot the Model
-        plot_model(model, train_list, test_list)
+        # plot_model(model, train_list, test_list, lr_start)  # TODO
 
     print()
 
@@ -111,11 +113,15 @@ def evaluate_model(train_data, valid_data, test_data, model, use_saved_weights):
 def main():
     train_data, valid_data, test_data, vocabulary_size = load_data(DATA_DIR)
 
-    evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size).to(device), use_saved_weights=True)
-    evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size, DROPOUT).to(device), use_saved_weights=True)
+    # evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size).to(device), 13, 1.0, 4, 2, 20)
+    evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size, 0.5).to(device), 50, 1.0, 9, 1.4, 50, use_saved_weights=False)
+    # evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size, 0.3).to(device), 13, 1.0, 8, 1.5, 50, use_saved_weights=False)
 
-    evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size).to(device), use_saved_weights=True)
-    evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size, DROPOUT).to(device), use_saved_weights=True)
+    # evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size).to(device), 20, 0.782, 4, 2, 50)
+    # for drop in np.arange(0.1,1,0.1):
+    #     print(drop)
+    #     evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size, 0.2).to(device), 3, lr, 20, 2, use_saved_weights=False)
+    # evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size, 0.3).to(device), 50, 0.3, 5, 1.2, use_saved_weights=False)  # 114
 
 
 if __name__ == '__main__':

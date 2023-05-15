@@ -1,19 +1,17 @@
-<h1>Deep Learning - Ex.1</h1>
-
-We used the pytorch [Quickstart guide](https://pytorch.org/tutorials/beginner/basics/quickstart_tutorial.html).
+<h1>Deep Learning - Ex.2</h1>
 
 The code is written using pytorch and is divided to several files:
 
 <b>notebook.ipynb </b> - Jupyter notebook for calling functions from main.py. Usage:
 
 1. Load the data
-- <b>Notice:</b> scipts, models and data are downloaded from our Github, because mounting from google drive on a shared folder made us problems, nevertheless, all the files are identical to those in the drive if you want to copy them and mount (you can verify that the last commit was made before the submission date).
+- <b>Notice:</b> scipts, models and data are downloaded from our Github, because mounting from google drive on a shared folder made us problems, nevertheless, all the files are identical to those in the drive if you want to copy them and mount (you can verify that the last commit of the folder was made before the submission date).
 2. Train / evaluate saved model by running one of the following functions as instructed:
 
-- train_original
-- train_dropout
-- train_weight_decay
-- train_batch_normalization
+- LSTM
+- LSTM with dropout
+- GRU
+- GRU with dropout
 
 Tips:
 - Training a model prints the training procedure and plot the graph. <br />
@@ -22,12 +20,17 @@ Tips:
 
 <b>main.py </b> - load the data and call training and testing functions.
 
-<b>models.py </b>- classes of different models (original net, net with dropout, net with BN).
+<b>trainer.py </b>- model & train & test implementation.
 
-<b>trainer.py </b>- train & test a model (pytorch code).
-
-<b>data </b> (folder) - contains the Fashion MNIST data.
+<b>data </b> (folder) - contains the PTB data (downloaded from moodle).
 
 <b>models </b> (folder) - contains the saved models.
 
 <b>plots </b> (folder) - contains the plots.
+
+<br /><br />
+Sources:
+- [Recurrent Neural Network Regularization](https://arxiv.org/abs/1409.2329)
+- [Paper github repo](https://github.com/wojzaremba/lstm)
+- [Another Github repo](https://github.com/ahmetumutdurmus/zaremba/blob/ac4127dce7f955bf291e430ea7689c0db027ae69/main.py)
+- [Kaggle Tutorial](https://www.kaggle.com/code/beastlyprime/pytorch-beginner-language-model/notebook)
