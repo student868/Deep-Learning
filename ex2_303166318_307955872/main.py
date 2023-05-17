@@ -43,7 +43,7 @@ def load_data(root):
 
 
 def plot_model(model, train_list, test_list, lr):
-    plt.title(model.name + '(LR = ' + lr + ')')
+    plt.title(model.name + '(LR = ' + str(lr) + ')')
     x = [i + 1 for i in range(len(train_list))]
     plt.plot(x, train_list, 'blue', label='Train')
     plt.plot(x, test_list, 'red', label='Test')
@@ -61,7 +61,7 @@ def nll_loss(scores, y):
     return torch.mean(-torch.log(answerprobs) * BATCH_SIZE)
 
 
-def evaluate_model(train_data, valid_data, test_data, model, epochs, lr_start: float, lr_decrease_start_epoch, lr_decrease_factor, sequence_length, use_saved_weights=True):
+def evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs, sequence_length, valid_stop=None, scheduler=None, use_saved_weights=True):
     print(' -- ' + model.name + ' -- ')
     loss_fn = nll_loss
 
@@ -76,52 +76,78 @@ def evaluate_model(train_data, valid_data, test_data, model, epochs, lr_start: f
 
     else:
         print('Training Model...')
-
-        optimizer = torch.optim.SGD(model.parameters(), lr=lr_start)
-        lr = lr_start
-        # optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.99)
+        lr_start = optimizer.param_groups[0]['lr']
 
         train_list = []
         test_list = []
 
         for epoch in range(epochs):
-            # changed LR according to epoch
-            if epoch >= lr_decrease_start_epoch:
-                for param_group in optimizer.param_groups:
-                    lr /= lr_decrease_factor
-                    param_group['lr'] = lr
-
             train(device, model, train_data, loss_fn, optimizer, sequence_length)
+
             train_list.append(test(device, model, train_data, loss_fn, sequence_length))
+            valid_perplexity = test(device, model, valid_data, loss_fn, sequence_length)
             test_list.append(test(device, model, test_data, loss_fn, sequence_length))
 
             print('Epoch [{}/{}], LR: {:8.6f}, Train Perplexity: {:5.2f}, Validation Perplexity: {:5.2f}'.format(
-                epoch + 1, epochs, lr,
-                train_list[-1],
-                test(device, model, valid_data, loss_fn, sequence_length)
-            ))
+                epoch + 1, epochs, optimizer.param_groups[0]['lr'], train_list[-1], valid_perplexity))
+
+            if valid_stop and valid_perplexity < valid_stop:
+                break
+
+            if scheduler:
+                if isinstance(scheduler, (torch.optim.lr_scheduler.ReduceLROnPlateau)):
+                    scheduler.step(valid_perplexity)
+                else:
+                    scheduler.step()
 
         # Save the Model
         torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '.pkl'))  # TODO
 
         # Plot the Model
-        # plot_model(model, train_list, test_list, lr_start)  # TODO
+        plot_model(model, train_list, test_list, lr_start)
 
     print()
+
+
+def train_lstm(train_data, valid_data, test_data, vocabulary_size, use_saved_weights):
+    model = RNN(nn.LSTM, vocabulary_size).to(device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
+    scheduler = torch.optim.lr_scheduler.MultiplicativeLR(optimizer, lambda epoch: 1 / 2 if epoch >= 4 else 1)
+    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=20, sequence_length=20, scheduler=scheduler, valid_stop=125, use_saved_weights=use_saved_weights)
+
+
+def train_lstm_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights):
+    model = RNN(nn.LSTM, vocabulary_size, w_init=0.1, dropout=0.5).to(device)  # TODO w_init=0.2
+    optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 9, 0.1)
+    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=100, sequence_length=35, scheduler=scheduler, valid_stop=100, use_saved_weights=use_saved_weights)
+
+
+def train_gru(train_data, valid_data, test_data, vocabulary_size, use_saved_weights):
+    model = RNN(nn.GRU, vocabulary_size).to(device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 4, 0.1)
+    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=20, sequence_length=20, scheduler=scheduler, valid_stop=125, use_saved_weights=use_saved_weights)
+
+
+def train_gru_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights):
+    model = RNN(nn.GRU, vocabulary_size, dropout=0.5).to(device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
+    # optimizer = torch.optim.AdamW(model.parameters())
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 30, 0.1)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0)
+    # def scheduler(perplexity):
+    #     raise
+    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=50, sequence_length=35, scheduler=scheduler, valid_stop=100, use_saved_weights=use_saved_weights)
 
 
 def main():
     train_data, valid_data, test_data, vocabulary_size = load_data(DATA_DIR)
 
-    # evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size).to(device), 13, 1.0, 4, 2, 20)
-    evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size, 0.5).to(device), 50, 1.0, 9, 1.4, 50, use_saved_weights=False)
-    # evaluate_model(train_data, valid_data, test_data, RNN(nn.LSTM, vocabulary_size, 0.3).to(device), 13, 1.0, 8, 1.5, 50, use_saved_weights=False)
-
-    # evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size).to(device), 20, 0.782, 4, 2, 50)
-    # for drop in np.arange(0.1,1,0.1):
-    #     print(drop)
-    #     evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size, 0.2).to(device), 3, lr, 20, 2, use_saved_weights=False)
-    # evaluate_model(train_data, valid_data, test_data, RNN(nn.GRU, vocabulary_size, 0.3).to(device), 50, 0.3, 5, 1.2, use_saved_weights=False)  # 114
+    # train_lstm(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
+    # train_lstm_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
+    # train_gru(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
+    train_gru_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
 
 
 if __name__ == '__main__':

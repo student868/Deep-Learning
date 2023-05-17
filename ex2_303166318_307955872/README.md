@@ -27,8 +27,8 @@ Tips:
 <b>models </b> (folder) - contains the saved models.
 
 <b>plots </b> (folder) - contains the plots.
+<br />
 
-<br /><br />
 Sources:
 - [Recurrent Neural Network Regularization](https://arxiv.org/abs/1409.2329)
 - [Paper github repo](https://github.com/wojzaremba/lstm)
