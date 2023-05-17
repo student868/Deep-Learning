@@ -23,6 +23,7 @@ class RNN(nn.Module):
 
         self.embedding = nn.Embedding(vocabulary_size, HIDDEN_UNITS)
         self.rnn = rnn_type(input_size=HIDDEN_UNITS, hidden_size=HIDDEN_UNITS, num_layers=NUM_LAYERS, dropout=dropout, batch_first=True)
+        self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(HIDDEN_UNITS, vocabulary_size)
 
         for param in self.parameters():
@@ -34,12 +35,14 @@ class RNN(nn.Module):
             h = [state.detach() for state in h]
             output, (h, c) = self.rnn(x, h)
             output = output.reshape(output.size(0) * output.size(1), output.size(2))
+            output = self.dropout(output)
             y = self.fc(output)
             return y, (h, c)
         else:  # GRU
             h = h.detach()
             output, h = self.rnn(x, h)
             output = output.reshape(output.size(0) * output.size(1), output.size(2))
+            output = self.dropout(output)
             y = self.fc(output)
             return y, h
 

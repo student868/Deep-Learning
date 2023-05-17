@@ -133,12 +133,8 @@ def train_gru(train_data, valid_data, test_data, vocabulary_size, use_saved_weig
 def train_gru_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights):
     model = RNN(nn.GRU, vocabulary_size, dropout=0.5).to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
-    # optimizer = torch.optim.AdamW(model.parameters())
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 30, 0.1)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0)
-    # def scheduler(perplexity):
-    #     raise
-    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=50, sequence_length=35, scheduler=scheduler, valid_stop=100, use_saved_weights=use_saved_weights)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.5)
+    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=100, sequence_length=35, scheduler=scheduler, valid_stop=100, use_saved_weights=use_saved_weights)
 
 
 def main():
