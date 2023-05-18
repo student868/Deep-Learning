@@ -109,7 +109,7 @@ def evaluate_model(train_data, valid_data, test_data, model, optimizer, max_epoc
             train_list[-1], valid_list[-1], test_list[-1]))
 
         # Save the Model
-        torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '.pkl'))  # TODO
+        # torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '.pkl'))
 
         # Plot the Model
         plot_model(model, train_list, test_list, lr_start, valid_stop)
@@ -148,9 +148,9 @@ def train_gru_with_dropout(train_data, valid_data, test_data, vocabulary_size, u
 def main():
     train_data, valid_data, test_data, vocabulary_size = load_data(DATA_DIR)
 
-    # train_lstm(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
-    # train_lstm_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
-    # train_gru(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
+    train_lstm(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
+    train_lstm_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
+    train_gru(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
     train_gru_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights=False)
 
 
