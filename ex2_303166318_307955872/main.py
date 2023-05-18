@@ -42,26 +42,29 @@ def load_data(root):
     return batch_data(train_data), batch_data(valid_data), batch_data(test_data), len(train_vocabulary)
 
 
-def plot_model(model, train_list, test_list, lr):
-    plt.title(model.name + '(LR = ' + str(lr) + ')')
+def plot_model(model, train_list, test_list, lr_start, valid_stop):
+    plt.title(model.name + ' (Starting LR = ' + str(lr_start) + ')')
     x = [i + 1 for i in range(len(train_list))]
     plt.plot(x, train_list, 'blue', label='Train')
     plt.plot(x, test_list, 'red', label='Test')
+    if valid_stop:
+        plt.axhline(y=valid_stop, color='black', linestyle='--')
     plt.legend(loc='upper right')
     plt.xlabel('Epoch')
     plt.ylabel('Perplexity')
     plt.ylim([0, 500])
+    plt.xlim(left=1)
     plt.savefig(os.path.join(PLOTS_DIR, model.name + '.png'))
     plt.show()
 
 
 def nll_loss(scores, y):
     probabilities = scores.exp() / scores.exp().sum(1, keepdim=True)
-    answerprobs = probabilities[range(len(y.reshape(-1))), y.reshape(-1)]
-    return torch.mean(-torch.log(answerprobs) * BATCH_SIZE)
+    probabilities = probabilities[range(len(y.reshape(-1))), y.reshape(-1)]
+    return torch.mean(-torch.log(probabilities) * BATCH_SIZE)
 
 
-def evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs, sequence_length, valid_stop=None, scheduler=None, use_saved_weights=True):
+def evaluate_model(train_data, valid_data, test_data, model, optimizer, max_epochs, sequence_length, valid_stop=None, scheduler=None, use_saved_weights=True):
     print(' -- ' + model.name + ' -- ')
     loss_fn = nll_loss
 
@@ -79,32 +82,37 @@ def evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs, 
         lr_start = optimizer.param_groups[0]['lr']
 
         train_list = []
+        valid_list = []
         test_list = []
 
-        for epoch in range(epochs):
+        for epoch in range(max_epochs):
             train(device, model, train_data, loss_fn, optimizer, sequence_length)
 
             train_list.append(test(device, model, train_data, loss_fn, sequence_length))
-            valid_perplexity = test(device, model, valid_data, loss_fn, sequence_length)
+            valid_list.append(test(device, model, valid_data, loss_fn, sequence_length))
             test_list.append(test(device, model, test_data, loss_fn, sequence_length))
 
             print('Epoch [{}/{}], LR: {:8.6f}, Train Perplexity: {:5.2f}, Validation Perplexity: {:5.2f}'.format(
-                epoch + 1, epochs, optimizer.param_groups[0]['lr'], train_list[-1], valid_perplexity))
+                epoch + 1, max_epochs, optimizer.param_groups[0]['lr'], train_list[-1], valid_list[-1]))
 
-            if valid_stop and valid_perplexity < valid_stop:
+            if valid_stop and valid_list[-1] < valid_stop:
                 break
 
             if scheduler:
-                if isinstance(scheduler, (torch.optim.lr_scheduler.ReduceLROnPlateau)):
-                    scheduler.step(valid_perplexity)
+                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    scheduler.step(valid_list[-1])
                 else:
                     scheduler.step()
+
+        # Print after training
+        print('Train Perplexity: {:5.2f}, Validation Perplexity: {:5.2f}, Test Perplexity: {:5.2f},'.format(
+            train_list[-1], valid_list[-1], test_list[-1]))
 
         # Save the Model
         torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '.pkl'))  # TODO
 
         # Plot the Model
-        plot_model(model, train_list, test_list, lr_start)
+        plot_model(model, train_list, test_list, lr_start, valid_stop)
 
     print()
 
@@ -112,29 +120,29 @@ def evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs, 
 def train_lstm(train_data, valid_data, test_data, vocabulary_size, use_saved_weights):
     model = RNN(nn.LSTM, vocabulary_size).to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
-    scheduler = torch.optim.lr_scheduler.MultiplicativeLR(optimizer, lambda epoch: 1 / 2 if epoch >= 4 else 1)
-    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=20, sequence_length=20, scheduler=scheduler, valid_stop=125, use_saved_weights=use_saved_weights)
+    scheduler = torch.optim.lr_scheduler.MultiplicativeLR(optimizer, lambda epoch: 0.5 if epoch >= 4 else 1)
+    evaluate_model(train_data, valid_data, test_data, model, optimizer, max_epochs=13, sequence_length=20, scheduler=scheduler, valid_stop=125, use_saved_weights=use_saved_weights)
 
 
 def train_lstm_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights):
-    model = RNN(nn.LSTM, vocabulary_size, w_init=0.1, dropout=0.5).to(device)  # TODO w_init=0.2
+    model = RNN(nn.LSTM, vocabulary_size, dropout=0.5).to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 9, 0.1)
-    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=100, sequence_length=35, scheduler=scheduler, valid_stop=100, use_saved_weights=use_saved_weights)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.5)
+    evaluate_model(train_data, valid_data, test_data, model, optimizer, max_epochs=100, sequence_length=35, scheduler=scheduler, valid_stop=100, use_saved_weights=use_saved_weights)
 
 
 def train_gru(train_data, valid_data, test_data, vocabulary_size, use_saved_weights):
     model = RNN(nn.GRU, vocabulary_size).to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 4, 0.1)
-    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=20, sequence_length=20, scheduler=scheduler, valid_stop=125, use_saved_weights=use_saved_weights)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.1)
+    evaluate_model(train_data, valid_data, test_data, model, optimizer, max_epochs=20, sequence_length=20, scheduler=scheduler, valid_stop=125, use_saved_weights=use_saved_weights)
 
 
 def train_gru_with_dropout(train_data, valid_data, test_data, vocabulary_size, use_saved_weights):
-    model = RNN(nn.GRU, vocabulary_size, dropout=0.5).to(device)
-    optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.5)
-    evaluate_model(train_data, valid_data, test_data, model, optimizer, epochs=100, sequence_length=35, scheduler=scheduler, valid_stop=100, use_saved_weights=use_saved_weights)
+    model = RNN(nn.GRU, vocabulary_size, dropout=0.369).to(device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.1, min_lr=0.0005)
+    evaluate_model(train_data, valid_data, test_data, model, optimizer, max_epochs=100, sequence_length=35, scheduler=scheduler, valid_stop=100, use_saved_weights=use_saved_weights)
 
 
 def main():

@@ -11,8 +11,6 @@ NUM_LAYERS = 2
 MAX_GRAD_NORM = 5
 
 
-# -------------------------------------------------
-
 class RNN(nn.Module):
     def __init__(self, rnn_type, vocabulary_size: int, w_init=0.1, dropout: float = 0):
         super().__init__()
