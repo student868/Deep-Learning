@@ -14,6 +14,7 @@ The code is written using pytorch and is divided to several files:
 - GRU with dropout
 
 Tips:
+- <b>It is recommended to use a GPU. </b>
 - Training a model prints the training procedure and plot the graph. <br />
 - Evaluating the saved model prints only the accuracy of the saved model on the data (if the pkl file is missing the program will train the model first).
 - If you want to overwrite the saved model uncomment "torch.save" call in "evaluate_model" function in "main.py" and train the model (<b>Warning:</b> the saved model will be deleted).

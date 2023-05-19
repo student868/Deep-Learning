@@ -14,7 +14,7 @@ PLOTS_DIR = 'plots'
 
 # -------------------------------------------------
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def load_data(root):
@@ -70,7 +70,7 @@ def evaluate_model(train_data, valid_data, test_data, model, optimizer, max_epoc
 
     if use_saved_weights and os.path.exists(os.path.join(MODELS_DIR, model.name + '.pkl')):
         print('Loading old weights...')
-        model.load_state_dict(torch.load(os.path.join(MODELS_DIR, model.name + '.pkl')))
+        model.load_state_dict(torch.load(os.path.join(MODELS_DIR, model.name + '.pkl'), map_location=device))
         print('Loaded Model - Train Perplexity: {:5.2f}, validation Perplexity: {:5.2f}, test Perplexity: {:5.2f}'.format(
             test(device, model, train_data, loss_fn, sequence_length),
             test(device, model, valid_data, loss_fn, sequence_length),
