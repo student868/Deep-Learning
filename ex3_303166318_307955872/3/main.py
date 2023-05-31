@@ -4,10 +4,11 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import ToTensor
-from models import *
+from models import Vae
 from trainer import train_epoch, test_epoch
+from sklearn import svm
 
-EPOCHS = 100
+EPOCHS = 200
 HIDDEN_SIZE = 600
 Z_SIZE = 50
 BATCH_SIZE = 64
@@ -23,58 +24,89 @@ device = 'cpu'  # TODO
 
 def load_data(dataset):
     training_data = dataset(root="data", train=True, download=True, transform=ToTensor())
-    training_data = torch.utils.data.Subset(training_data, torch.randperm(len(training_data))[:3000])  # TODO
+    # training_data = torch.utils.data.Subset(training_data, torch.arange(3000))  # TODO
     test_data = dataset(root="data", train=False, download=True, transform=ToTensor())
     return training_data, test_data
 
 
-def train(training_data, test_data, labeled_samples, nn_epochs, use_saved_weights):
+def init_weights(layer):
+    if isinstance(layer, nn.Linear):
+        nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')  # best initialization even though activation is softplus
+
+
+def construct_svm_data(train_dataloader, test_dataloader, model):
+    X_train, y_train = next(iter(train_dataloader))
+    mu, sigma, _ = model(X_train.flatten(1))
+    X_train = torch.cat([mu, sigma], dim=1)
+
+    X_test, y_test = next(iter(test_dataloader))
+    mu, sigma, _ = model(X_test.flatten(1))
+    X_test = torch.cat([mu, sigma], dim=1)
+
+    return (X_train.detach().numpy(), y_train.detach().numpy()), \
+           (X_test.detach().numpy(), y_test.detach().numpy())
+
+
+def train(train_dataset, test_dataset, labeled_samples, nn_epochs, use_saved_weights):
     # Train VAE
-    train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE)
-    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE)
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
+    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
 
     model = Vae(
-        training_data[0][0].flatten().size(0),
+        train_dataset[0][0].flatten().size(0),
         HIDDEN_SIZE,
         Z_SIZE,
-        training_data.__class__.__name__ + '_' + str(labeled_samples)
+        train_dataset.__class__.__name__ + '_NN'
     ).to(device)
-    loss_fns = {'reconstruction': nn.BCELoss(), 'z': nn.KLDivLoss}
-    optimizer = torch.optim.Adam(model.parameters())
+    model.apply(init_weights)
+    nn_save_path = os.path.join(MODELS_DIR, model.name + '.pkl')
 
-    if use_saved_weights and os.path.exists(os.path.join(MODELS_DIR, model.name + '_NN.pkl')):
-        print('Loading old weights...')
-        model.load_state_dict(torch.load(os.path.join(MODELS_DIR, model.name + '_NN.pkl')))
-        test_loss = test_epoch(device, test_dataloader, model, loss_fns)
-        print(f"Loaded Model - Test Loss: {test_loss :>0.3f}%")
+    construction_loss_fn = nn.BCELoss(reduction='sum')
+
+    if use_saved_weights and os.path.exists(nn_save_path):
+        print('Loading old weights from "' + nn_save_path + '"')
+        model.load_state_dict(torch.load(nn_save_path))
+        test_loss = test_epoch(device, test_dataloader, model, construction_loss_fn)
+        print("Loaded Model - Test Loss: {:>0.3f}".format(test_loss))
 
     else:
         print('Training Model...')
-        for t in range(nn_epochs):
-            train_epoch(device, train_dataloader, model, loss_fns, optimizer)
-            train_loss = test_epoch(device, train_dataloader, model, loss_fns)
-            test_loss = test_epoch(device, test_dataloader, model, loss_fns)
-            if t % PRINT_EVERY == 0 or t == nn_epochs - 1:
-                print(f"Epoch {t + 1} - Train Loss: {train_loss :>0.3f}, Test Loss: {test_loss :>0.3f}")
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+        for epoch in range(nn_epochs):
+            train_epoch(device, train_dataloader, model, construction_loss_fn, optimizer)
+            train_loss = test_epoch(device, train_dataloader, model, construction_loss_fn)
+            test_loss = test_epoch(device, test_dataloader, model, construction_loss_fn)
+            if epoch % PRINT_EVERY == 0 or epoch == nn_epochs - 1:
+                print("Epoch [{}/{}], LR: {:8.6f}, Train Loss: {:>0.3f}, Test Loss: {:>0.3f}".format(
+                    epoch + 1, EPOCHS, optimizer.param_groups[0]['lr'], train_loss, test_loss))
+            scheduler.step(test_loss)
 
         # Save the Model
-        torch.save(model.state_dict(), os.path.join(MODELS_DIR, model.name + '_NN.pkl'))  # TODO
+        print('Saving Model to "' + nn_save_path + '"')
+        torch.save(model.state_dict(), nn_save_path)  # TODO
 
     # Train SVM
-    training_data_subset = labeled_samples  # TODO
-    train_dataloader_without_labels = DataLoader(training_data, batch_size=BATCH_SIZE)
+    (X_train, y_train), (X_test, y_test) = construct_svm_data(
+        DataLoader(train_dataset, batch_size=labeled_samples),
+        DataLoader(test_dataset, batch_size=len(test_dataset)),
+        model)
+    svm_classifier = svm.SVC(kernel='poly', degree=5)
+    svm_classifier.fit(X_train, y_train)
+    pred = svm_classifier.predict(X_test)
+    print('Accuracy Error for {} labeled samples: {:>0.2f}%'.format(labeled_samples, 100 * (1 - pred.eq(y_test).mean())))
+    print()
 
 
 def main():
     training_data, test_data = load_data(datasets.MNIST)
-    for labeled_samples in [100]:
-    # for labeled_samples in [100, 600, 1000, 3000]:  TODO
-        train(training_data, test_data, labeled_samples, EPOCHS, use_saved_weights=False)
+    for labeled_samples in [100, 600, 1000, 3000]:
+        train(training_data, test_data, labeled_samples, EPOCHS, use_saved_weights=True)
 
     exit()
     training_data, test_data = load_data(datasets.FashionMNIST)
     for labeled_samples in [100, 600, 1000, 3000]:
-        train(training_data, test_data, labeled_samples, EPOCHS, use_saved_weights=False)
+        train(training_data, test_data, labeled_samples, EPOCHS, use_saved_weights=True)
 
 
 if __name__ == '__main__':

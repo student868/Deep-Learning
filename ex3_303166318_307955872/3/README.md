@@ -31,7 +31,6 @@ Tips:
 <br />
 
 Sources:
-- [Recurrent Neural Network Regularization](https://arxiv.org/abs/1409.2329)
-- [Paper github repo](https://github.com/wojzaremba/lstm)
-- [Another Github repo](https://github.com/ahmetumutdurmus/zaremba/blob/ac4127dce7f955bf291e430ea7689c0db027ae69/main.py)
-- [Kaggle Tutorial](https://www.kaggle.com/code/beastlyprime/pytorch-beginner-language-model/notebook)
+- [Semi-supervised Learning with Deep Generative Models](https://arxiv.org/abs/1406.5298)
+- [Official implementation](https://github.com/dpkingma/nips14-ssl/blob/master/gpulearn_z_x.py)
+- [VAE Tutorial](https://sannaperzon.medium.com/paper-summary-variational-autoencoders-with-pytorch-implementation-1b4b23b1763a)
