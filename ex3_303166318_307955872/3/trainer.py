@@ -7,7 +7,7 @@ def train_epoch(device, dataloader, model, construction_loss_fn, optimizer):
         X = X.to(device).flatten(1)
         mu, sigma, pred = model(X)
 
-        # Backprop and optimize
+        # Compute loss
         kl_div = - torch.sum(1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2))
         loss = construction_loss_fn(pred, X) + kl_div
 
@@ -24,6 +24,8 @@ def test_epoch(device, dataloader, model, construction_loss_fn):
         for X, _ in dataloader:
             X = X.to(device).flatten(1)
             mu, sigma, pred = model(X)
+
+            # Compute loss
             kl_div = - torch.sum(1 + torch.log(sigma.pow(2)) - mu.pow(2) - sigma.pow(2))
             loss += construction_loss_fn(pred, X) + kl_div
     loss /= len(dataloader.dataset)

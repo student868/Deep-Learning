@@ -7,6 +7,8 @@ from torchvision.transforms import ToTensor
 from models import Vae
 from trainer import train_epoch, test_epoch
 from sklearn import svm
+import pickle
+
 
 EPOCHS = 200
 HIDDEN_SIZE = 600
@@ -24,7 +26,6 @@ device = 'cpu'  # TODO
 
 def load_data(dataset):
     training_data = dataset(root="data", train=True, download=True, transform=ToTensor())
-    # training_data = torch.utils.data.Subset(training_data, torch.arange(3000))  # TODO
     test_data = dataset(root="data", train=False, download=True, transform=ToTensor())
     return training_data, test_data
 
@@ -34,9 +35,17 @@ def init_weights(layer):
         nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')  # best initialization even though activation is softplus
 
 
-def construct_svm_data(train_dataloader, test_dataloader, model):
+def construct_svm_data(train_dataloader, test_dataloader, labeled_samples, model):
+    # Get balanced classes
     X_train, y_train = next(iter(train_dataloader))
-    mu, sigma, _ = model(X_train.flatten(1))
+    X_train = X_train.flatten(1)
+    num_classes = len(y_train.unique())
+    indices_of_balanced_classes = torch.cat([(y_train == i).nonzero()[:(labeled_samples // num_classes)].flatten() for i in range(num_classes)])
+    X_train = X_train[indices_of_balanced_classes]
+    y_train = y_train[indices_of_balanced_classes]
+
+    # Get latent representation
+    mu, sigma, _ = model(X_train)
     X_train = torch.cat([mu, sigma], dim=1)
 
     X_test, y_test = next(iter(test_dataloader))
@@ -64,13 +73,14 @@ def train(train_dataset, test_dataset, labeled_samples, nn_epochs, use_saved_wei
     construction_loss_fn = nn.BCELoss(reduction='sum')
 
     if use_saved_weights and os.path.exists(nn_save_path):
-        print('Loading old weights from "' + nn_save_path + '"')
+        # Load the NN model
+        print('Loading NN old weights from "' + nn_save_path + '"')
         model.load_state_dict(torch.load(nn_save_path))
         test_loss = test_epoch(device, test_dataloader, model, construction_loss_fn)
-        print("Loaded Model - Test Loss: {:>0.3f}".format(test_loss))
+        print("Loaded NN model - Test Loss: {:>0.3f}".format(test_loss))
 
     else:
-        print('Training Model...')
+        print('Training NN model...')
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
         for epoch in range(nn_epochs):
@@ -82,19 +92,34 @@ def train(train_dataset, test_dataset, labeled_samples, nn_epochs, use_saved_wei
                     epoch + 1, EPOCHS, optimizer.param_groups[0]['lr'], train_loss, test_loss))
             scheduler.step(test_loss)
 
-        # Save the Model
-        print('Saving Model to "' + nn_save_path + '"')
+        # Save the NN model
+        print('Saving NN model to "' + nn_save_path + '"')
         torch.save(model.state_dict(), nn_save_path)  # TODO
 
     # Train SVM
+    svm_save_path = os.path.join(MODELS_DIR, train_dataset.__class__.__name__ + '_SVM' + '_' + str(labeled_samples) + '.pkl')
     (X_train, y_train), (X_test, y_test) = construct_svm_data(
-        DataLoader(train_dataset, batch_size=labeled_samples),
+        DataLoader(train_dataset, batch_size=len(train_dataset)),
         DataLoader(test_dataset, batch_size=len(test_dataset)),
+        labeled_samples,
         model)
     svm_classifier = svm.SVC(kernel='poly', degree=5)
-    svm_classifier.fit(X_train, y_train)
+
+    if use_saved_weights and os.path.exists(svm_save_path):
+        # Load the SVM model
+        print('Loading SVM old weights from "' + svm_save_path + '"')
+        svm_classifier = pickle.load(open(svm_save_path, 'rb'))
+
+    else:
+        print('Training SVM model...')
+        svm_classifier.fit(X_train, y_train)
+
+        # Save the SVM model
+        print('Saving SVM model to "' + svm_save_path + '"')
+        pickle.dump(svm_classifier, open(svm_save_path, 'wb'))
+
     pred = svm_classifier.predict(X_test)
-    print('Accuracy Error for {} labeled samples: {:>0.2f}%'.format(labeled_samples, 100 * (1 - pred.eq(y_test).mean())))
+    print('Accuracy Error for {} labeled samples: {:>0.2f}%'.format(labeled_samples, 100 * (1 - (pred == y_test).mean())))
     print()
 
 
