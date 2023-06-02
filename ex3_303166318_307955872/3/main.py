@@ -9,14 +9,12 @@ from trainer import train_epoch, test_epoch
 from sklearn import svm
 import pickle
 
-
-EPOCHS = 200
+TRAIN_LR_STOP = 1e-6
 HIDDEN_SIZE = 600
 Z_SIZE = 50
 BATCH_SIZE = 64
 PRINT_EVERY = 5
 MODELS_DIR = 'models'
-PLOTS_DIR = 'plots'
 
 torch.manual_seed(0)
 
@@ -41,8 +39,8 @@ def construct_svm_data(train_dataloader, test_dataloader, labeled_samples, model
     X_train = X_train.flatten(1)
     num_classes = len(y_train.unique())
     indices_of_balanced_classes = torch.cat([(y_train == i).nonzero()[:(labeled_samples // num_classes)].flatten() for i in range(num_classes)])
-    X_train = X_train[indices_of_balanced_classes]
-    y_train = y_train[indices_of_balanced_classes]
+    X_train = X_train[indices_of_balanced_classes].to(device)
+    y_train = y_train[indices_of_balanced_classes].to(device)
 
     # Get latent representation
     mu, sigma, _ = model(X_train)
@@ -56,7 +54,7 @@ def construct_svm_data(train_dataloader, test_dataloader, labeled_samples, model
            (X_test.detach().numpy(), y_test.detach().numpy())
 
 
-def train(train_dataset, test_dataset, labeled_samples, nn_epochs, use_saved_weights):
+def train(train_dataset, test_dataset, labeled_samples, use_saved_weights):
     # Train VAE
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
@@ -82,15 +80,22 @@ def train(train_dataset, test_dataset, labeled_samples, nn_epochs, use_saved_wei
     else:
         print('Training NN model...')
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
-        for epoch in range(nn_epochs):
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, cooldown=10)
+        epoch = 0
+        while optimizer.param_groups[0]['lr'] > TRAIN_LR_STOP:
             train_epoch(device, train_dataloader, model, construction_loss_fn, optimizer)
             train_loss = test_epoch(device, train_dataloader, model, construction_loss_fn)
             test_loss = test_epoch(device, test_dataloader, model, construction_loss_fn)
-            if epoch % PRINT_EVERY == 0 or epoch == nn_epochs - 1:
-                print("Epoch [{}/{}], LR: {:8.6f}, Train Loss: {:>0.3f}, Test Loss: {:>0.3f}".format(
-                    epoch + 1, EPOCHS, optimizer.param_groups[0]['lr'], train_loss, test_loss))
+            if epoch % PRINT_EVERY == 0:
+                print("Epoch {}, LR: {:8.6f}, Train Loss: {:>0.3f}, Test Loss: {:>0.3f}".format(
+                    epoch + 1, optimizer.param_groups[0]['lr'], train_loss, test_loss))
             scheduler.step(test_loss)
+            epoch += 1
+
+        train_loss = test_epoch(device, train_dataloader, model, construction_loss_fn)
+        test_loss = test_epoch(device, test_dataloader, model, construction_loss_fn)
+        print("Epoch {}, LR: {:8.6f}, Train Loss: {:>0.3f}, Test Loss: {:>0.3f}".format(
+            epoch + 1, optimizer.param_groups[0]['lr'], train_loss, test_loss))
 
         # Save the NN model
         print('Saving NN model to "' + nn_save_path + '"')
@@ -126,12 +131,14 @@ def train(train_dataset, test_dataset, labeled_samples, nn_epochs, use_saved_wei
 def main():
     training_data, test_data = load_data(datasets.MNIST)
     for labeled_samples in [100, 600, 1000, 3000]:
-        train(training_data, test_data, labeled_samples, EPOCHS, use_saved_weights=True)
+        train(training_data, test_data, labeled_samples, use_saved_weights=True)
 
-    exit()
+    print('#' * 50)
+    print()
+
     training_data, test_data = load_data(datasets.FashionMNIST)
     for labeled_samples in [100, 600, 1000, 3000]:
-        train(training_data, test_data, labeled_samples, EPOCHS, use_saved_weights=True)
+        train(training_data, test_data, labeled_samples, use_saved_weights=True)
 
 
 if __name__ == '__main__':
