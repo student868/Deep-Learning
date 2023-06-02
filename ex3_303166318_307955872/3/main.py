@@ -19,7 +19,6 @@ MODELS_DIR = 'models'
 torch.manual_seed(0)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-device = 'cpu'  # TODO
 
 
 def load_data(dataset):
@@ -40,15 +39,19 @@ def construct_svm_data(train_dataloader, test_dataloader, labeled_samples, model
     num_classes = len(y_train.unique())
     indices_of_balanced_classes = torch.cat([(y_train == i).nonzero()[:(labeled_samples // num_classes)].flatten() for i in range(num_classes)])
     X_train = X_train[indices_of_balanced_classes].to(device)
-    y_train = y_train[indices_of_balanced_classes].to(device)
+    y_train = y_train[indices_of_balanced_classes]
 
     # Get latent representation
     mu, sigma, _ = model(X_train)
     X_train = torch.cat([mu, sigma], dim=1)
 
     X_test, y_test = next(iter(test_dataloader))
+    X_test = X_test.to(device)
     mu, sigma, _ = model(X_test.flatten(1))
     X_test = torch.cat([mu, sigma], dim=1)
+
+    X_train = X_train.cpu()
+    X_test = X_test.cpu()
 
     return (X_train.detach().numpy(), y_train.detach().numpy()), \
            (X_test.detach().numpy(), y_test.detach().numpy())
@@ -73,7 +76,7 @@ def train(train_dataset, test_dataset, labeled_samples, use_saved_weights):
     if use_saved_weights and os.path.exists(nn_save_path):
         # Load the NN model
         print('Loading NN old weights from "' + nn_save_path + '"')
-        model.load_state_dict(torch.load(nn_save_path))
+        model.load_state_dict(torch.load(nn_save_path, map_location=torch.device(device)))
         test_loss = test_epoch(device, test_dataloader, model, construction_loss_fn)
         print("Loaded NN model - Test Loss: {:>0.3f}".format(test_loss))
 
