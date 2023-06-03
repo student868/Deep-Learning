@@ -102,7 +102,7 @@ def train(train_dataset, test_dataset, labeled_samples, use_saved_weights):
 
         # Save the NN model
         print('Saving NN model to "' + nn_save_path + '"')
-        torch.save(model.state_dict(), nn_save_path)  # TODO
+        # torch.save(model.state_dict(), nn_save_path)
 
     # Train SVM
     svm_save_path = os.path.join(MODELS_DIR, train_dataset.__class__.__name__ + '_SVM' + '_' + str(labeled_samples) + '.pkl')
