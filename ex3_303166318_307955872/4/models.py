@@ -18,7 +18,7 @@ class Generator(nn.Module):
 
         self.fc = nn.Linear(z_size, 4 * 4 * 4 * dim)
         self.bn1 = nn.BatchNorm1d(4 * 4 * 4 * dim)
-        self.deconv1 = nn.ConvTranspose2d(4 * dim, 2 * dim, 4, stride=2, padding=1)
+        self.deconv1 = nn.ConvTranspose2d(4 * dim, 2 * dim, 3, stride=2, padding=1)
         self.bn2 = nn.BatchNorm2d(2 * dim)
         self.deconv2 = nn.ConvTranspose2d(2 * dim, dim, 4, stride=2, padding=1)
         self.bn3 = nn.BatchNorm2d(dim)
@@ -36,7 +36,7 @@ class Generator(nn.Module):
             x = self.bn2(x)
         x = relu(x)
 
-        x = x[:, :, :7, :7]
+        x = x[:, :, :7, :7]  # TODO remove?
 
         x = self.deconv2(x)
         if self.mode == 'WGAN':
@@ -66,11 +66,9 @@ class Discriminator(nn.Module):
         self.name = model_name
         self.dim = dim
 
-        self.conv1 = nn.Conv2d(1, dim, 5, stride=2, padding=2)
-        self.conv2 = nn.Conv2d(dim, 2 * dim, 5, stride=2, padding=2)
-        self.bn1 = nn.BatchNorm2d(2 * dim)
-        self.conv3 = nn.Conv2d(2 * dim, 4 * dim, 5, stride=2, padding=2)
-        self.bn2 = nn.BatchNorm2d(4 * dim)
+        self.conv1 = nn.Conv2d(1, dim, 3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(dim, 2 * dim, 3, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(2 * dim, 4 * dim, 3, stride=2, padding=1)
         self.fc = nn.Linear(4 * 4 * 4 * dim, 1)
 
     def forward(self, x):
@@ -80,14 +78,10 @@ class Discriminator(nn.Module):
         x = leaky_relu(x)
 
         x = self.conv2(x)
-        if self.mode == 'WGAN':
-            x = self.bn1(x)
         x = leaky_relu(x)
 
         x = self.conv3(x)
-        if self.mode == 'WGAN':
-            x = self.bn2(x)
-        x = leaky_relu(x)
+        x = sigmoid(x)
 
         x = torch.reshape(x, (-1, 4 * 4 * 4 * self.dim))
         x = self.fc(x)

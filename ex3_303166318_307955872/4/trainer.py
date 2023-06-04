@@ -1,7 +1,7 @@
 import torch
 from models import GeneratorWGAN, DiscriminatorWGAN, GeneratorDCGAN, DiscriminatorDCGAN
 
-DISCRIMINATOR_WEIGHT_CLIP = 0.1
+DISCRIMINATOR_WEIGHT_CLIP = 0.01
 CRITIC_ITERS = 5  # For WGAN number of critic iters per gen iter
 
 

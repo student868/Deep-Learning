@@ -31,14 +31,14 @@ def load_data(dataset):
     return training_data, test_data
 
 
-def init_weights(layer):
+def init_weights(layer):  # TODO remove?
     if isinstance(layer, nn.Linear):
         nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')  # best initialization even though activation is softplus
 
 
 def train(train_dataset, test_dataset, g, d, use_saved_weights):
-    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
-    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
     g_save_path = os.path.join(MODELS_DIR, g.name + '.pkl')
     d_save_path = os.path.join(MODELS_DIR, d.name + '.pkl')
@@ -54,8 +54,8 @@ def train(train_dataset, test_dataset, g, d, use_saved_weights):
 
     else:
         print('Training...')
-        g_optimizer = torch.optim.Adam(g.parameters())
-        d_optimizer = torch.optim.Adam(d.parameters())
+        g_optimizer = torch.optim.Adam(g.parameters(), lr=0.0001)
+        d_optimizer = torch.optim.Adam(d.parameters(), lr=0.0001)
 
         train_list = []
         test_list = []
@@ -72,7 +72,7 @@ def train(train_dataset, test_dataset, g, d, use_saved_weights):
             img = g(noise).reshape((-1, 1, 28, 28))
 
             grid = torchvision.utils.make_grid(img, nrow=10).cpu().detach().numpy()
-            grid = np.transpose(grid, (1,2,0))
+            grid = np.transpose(grid, (1, 2, 0))
             plt.imshow(grid, cmap='gray')
             plt.show()
 
@@ -83,7 +83,7 @@ def train(train_dataset, test_dataset, g, d, use_saved_weights):
 
 
 def main():
-    training_data, test_data = load_data(datasets.MNIST)
+    training_data, test_data = load_data(datasets.FashionMNIST)
     g = GeneratorWGAN(DIM, Z_SIZE).to(device)
     d = DiscriminatorWGAN(DIM).to(device)
     train(training_data, test_data, g, d, use_saved_weights=False)
