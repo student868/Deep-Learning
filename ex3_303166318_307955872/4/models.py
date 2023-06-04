@@ -18,11 +18,11 @@ class Generator(nn.Module):
 
         self.fc = nn.Linear(z_size, 4 * 4 * 4 * dim)
         self.bn1 = nn.BatchNorm1d(4 * 4 * 4 * dim)
-        self.deconv1 = nn.ConvTranspose2d(4 * dim, 2 * dim, 4, 2, 1)
+        self.deconv1 = nn.ConvTranspose2d(4 * dim, 2 * dim, 4, stride=2, padding=1)
         self.bn2 = nn.BatchNorm2d(2 * dim)
-        self.deconv2 = nn.ConvTranspose2d(2 * dim, dim, 4, 2, 1)
+        self.deconv2 = nn.ConvTranspose2d(2 * dim, dim, 4, stride=2, padding=1)
         self.bn3 = nn.BatchNorm2d(dim)
-        self.deconv3 = nn.ConvTranspose2d(dim, 1, 4, 2, 1)
+        self.deconv3 = nn.ConvTranspose2d(dim, 1, 4, stride=2, padding=1)
 
     def forward(self, noise):
         x = self.fc(noise)
@@ -50,13 +50,13 @@ class Generator(nn.Module):
 
 
 class GeneratorWGAN(Generator):
-    def __init__(self, model_name, dim, z_size):
-        super(GeneratorWGAN, self).__init__('WGAN', model_name, dim, z_size)
+    def __init__(self, dim, z_size):
+        super(GeneratorWGAN, self).__init__('WGAN', self.__class__.__name__, dim, z_size)
 
 
 class GeneratorDCGAN(Generator):
-    def __init__(self, model_name, dim, z_size):
-        super(GeneratorDCGAN, self).__init__('DCGAN', model_name, dim, z_size)
+    def __init__(self, dim, z_size):
+        super(GeneratorDCGAN, self).__init__('DCGAN', self.__class__.__name__, dim, z_size)
 
 
 class Discriminator(nn.Module):
@@ -66,10 +66,10 @@ class Discriminator(nn.Module):
         self.name = model_name
         self.dim = dim
 
-        self.conv1 = nn.Conv2d(1, dim, 5, stride=2, padding=1)
-        self.conv2 = nn.Conv2d(dim, 2 * dim, 5, stride=2, padding=1)
+        self.conv1 = nn.Conv2d(1, dim, 5, stride=2, padding=2)
+        self.conv2 = nn.Conv2d(dim, 2 * dim, 5, stride=2, padding=2)
         self.bn1 = nn.BatchNorm2d(2 * dim)
-        self.conv3 = nn.Conv2d(2 * dim, 4 * dim, 5, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(2 * dim, 4 * dim, 5, stride=2, padding=2)
         self.bn2 = nn.BatchNorm2d(4 * dim)
         self.fc = nn.Linear(4 * 4 * 4 * dim, 1)
 
@@ -96,10 +96,10 @@ class Discriminator(nn.Module):
 
 
 class DiscriminatorWGAN(Discriminator):
-    def __init__(self, model_name, dim):
-        super(DiscriminatorWGAN, self).__init__('WGAN', model_name, dim)
+    def __init__(self, dim):
+        super(DiscriminatorWGAN, self).__init__('WGAN', self.__class__.__name__, dim)
 
 
 class DiscriminatorDCGAN(Discriminator):
-    def __init__(self, model_name, dim):
-        super(DiscriminatorDCGAN, self).__init__('DCGAN', model_name, dim)
+    def __init__(self, dim):
+        super(DiscriminatorDCGAN, self).__init__('DCGAN', self.__class__.__name__, dim)

@@ -1,5 +1,9 @@
 import os.path
+
+import numpy as np
+import matplotlib.pyplot as plt
 import torch
+import torchvision.utils
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
@@ -22,7 +26,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def load_data(dataset):
     training_data = dataset(root="data", train=True, download=True, transform=ToTensor())
-    training_data = torch.utils.data.Subset(training_data, torch.arange(3000))
+    training_data = torch.utils.data.Subset(training_data, torch.arange(5000))  # TODO
     test_data = dataset(root="data", train=False, download=True, transform=ToTensor())
     return training_data, test_data
 
@@ -63,6 +67,15 @@ def train(train_dataset, test_dataset, g, d, use_saved_weights):
                 print("Epoch {:>4}, Train Loss: (G: {:>+10.5f}, D: {:>+10.5f}), Test Loss: (G: {:>+10.5f}, D: {:>+10.5f})".format(
                     epoch + 1, train_list[-1][0], train_list[-1][1], test_list[-1][0], test_list[-1][1]))
 
+            plt.title('Epoch #' + str(epoch + 1))
+            noise = torch.randn((100, g.z_size)).to(device)
+            img = g(noise).reshape((-1, 1, 28, 28))
+
+            grid = torchvision.utils.make_grid(img, nrow=10).cpu().detach().numpy()
+            grid = np.transpose(grid, (1,2,0))
+            plt.imshow(grid, cmap='gray')
+            plt.show()
+
         # Save the models
         print('Saving models to "' + g_save_path + '" and "' + d_save_path + '"')
         torch.save(g.state_dict(), g_save_path)  # TODO
@@ -71,9 +84,9 @@ def train(train_dataset, test_dataset, g, d, use_saved_weights):
 
 def main():
     training_data, test_data = load_data(datasets.MNIST)
-    g = GeneratorWGAN('WGAN Generator', DIM, Z_SIZE).to(device)
-    d = DiscriminatorWGAN('WGAN Discriminator', DIM).to(device)
-    train(training_data, test_data, g, d, use_saved_weights=True)
+    g = GeneratorWGAN(DIM, Z_SIZE).to(device)
+    d = DiscriminatorWGAN(DIM).to(device)
+    train(training_data, test_data, g, d, use_saved_weights=False)
 
     print('#' * 50)
     print()
