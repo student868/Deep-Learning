@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 from models import GeneratorWGAN, GeneratorDCGAN, DiscriminatorWGAN, DiscriminatorDCGAN
-from trainer import train_epoch, test_iteration
+from trainer import train_epoch, test_epoch
 
 BATCH_SIZE = 64
 PRINT_EVERY = 1
@@ -26,14 +26,26 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def load_data(dataset):
     training_data = dataset(root="data", train=True, download=True, transform=ToTensor())
-    training_data = torch.utils.data.Subset(training_data, torch.arange(5000))  # TODO
     test_data = dataset(root="data", train=False, download=True, transform=ToTensor())
     return training_data, test_data
 
 
-def init_weights(layer):  # TODO remove?
+def init_weights(layer):
     if isinstance(layer, nn.Linear):
-        nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')  # best initialization even though activation is softplus
+        nn.init.xavier_normal_(layer.weight)
+
+
+def plot_model(model, train_list, test_list):
+    plt.title(model.name)
+    x = [i + 1 for i in range(len(train_list))]
+    plt.plot(x, train_list, 'blue', label='Train')
+    plt.plot(x, test_list, 'red', label='Test')
+    plt.legend(loc='upper right')
+    plt.xlabel('Iteration')
+    plt.ylabel('Loss')
+    plt.xlim(left=1)
+    plt.savefig(os.path.join(PLOTS_DIR, model.name + '.png'))
+    plt.show()
 
 
 def train(train_dataset, test_dataset, g, d, use_saved_weights):
@@ -43,26 +55,29 @@ def train(train_dataset, test_dataset, g, d, use_saved_weights):
     g_save_path = os.path.join(MODELS_DIR, g.name + '.pkl')
     d_save_path = os.path.join(MODELS_DIR, d.name + '.pkl')
 
+    g.apply(init_weights)
+    d.apply(init_weights)
+
     if use_saved_weights and (os.path.exists(g_save_path) and os.path.exists(d_save_path)):
         # Load the models
         print('Loading old weights from "' + g_save_path + '" and "' + d_save_path + '"')
         g.load_state_dict(torch.load(g_save_path, map_location=torch.device(device)))
         d.load_state_dict(torch.load(d_save_path, map_location=torch.device(device)))
-        g_test_loss, d_test_loss = test_iteration(device, test_dataloader, g, d)
+        g_test_loss, d_test_loss = test_epoch(device, test_dataloader, g, d)
         print("Loaded models - Test Loss: ({:>0.3f}, {:>0.3f})".format(
             g_test_loss, d_test_loss))
 
     else:
         print('Training...')
-        g_optimizer = torch.optim.Adam(g.parameters(), lr=0.0001)
-        d_optimizer = torch.optim.Adam(d.parameters(), lr=0.0001)
+        g_optimizer = torch.optim.RMSprop(g.parameters(), lr=5e-5)
+        d_optimizer = torch.optim.RMSprop(d.parameters(), lr=5e-5)
 
         train_list = []
         test_list = []
         for epoch in range(EPOCHS):
             train_epoch(device, train_dataloader, g, d, g_optimizer, d_optimizer)
-            train_list.append(test_iteration(device, train_dataloader, g, d))
-            test_list.append(test_iteration(device, test_dataloader, g, d))
+            train_list.append(test_epoch(device, train_dataloader, g, d))
+            test_list.append(test_epoch(device, test_dataloader, g, d))
             if epoch % PRINT_EVERY == 0:
                 print("Epoch {:>4}, Train Loss: (G: {:>+10.5f}, D: {:>+10.5f}), Test Loss: (G: {:>+10.5f}, D: {:>+10.5f})".format(
                     epoch + 1, train_list[-1][0], train_list[-1][1], test_list[-1][0], test_list[-1][1]))

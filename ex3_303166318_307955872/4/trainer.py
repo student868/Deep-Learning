@@ -2,7 +2,7 @@ import torch
 from models import GeneratorWGAN, DiscriminatorWGAN, GeneratorDCGAN, DiscriminatorDCGAN
 
 DISCRIMINATOR_WEIGHT_CLIP = 0.01
-CRITIC_ITERS = 5  # For WGAN number of critic iters per gen iter
+DISCRIMINATOR_ITERATIONS = 5  # For WGAN, number of discriminator iterations per generator iterations
 
 
 def wgan_g_loss_fn(d_score_on_fake):
@@ -13,12 +13,12 @@ def wgan_d_loss_fn(d_score_on_fake, d_score_on_real):
     return -1 * (torch.mean(d_score_on_real) - torch.mean(d_score_on_fake))  # -1 to make maximization problem to minimization problem
 
 
-def dcgan_g_loss_fn(d_score_on_fake):
-    return torch.mean(torch.log(1 - d_score_on_fake))
-
-
-def dcgan_d_loss_fn(d_score_on_fake, d_score_on_real):
-    return -1 * (torch.mean(torch.log(d_score_on_real)) + torch.mean(torch.log(1 - d_score_on_fake)))  # -1 to make maximization problem to minimization problem
+# def dcgan_g_loss_fn(d_score_on_fake):
+#     return torch.mean(torch.log(1 - d_score_on_fake))
+#
+#
+# def dcgan_d_loss_fn(d_score_on_fake, d_score_on_real):
+#     return -1 * (torch.mean(torch.log(d_score_on_real)) + torch.mean(torch.log(1 - d_score_on_fake)))  # -1 to make maximization problem to minimization problem
 
 
 def g_train_batch(device, dataloader, g, d, optimizer):
@@ -71,11 +71,15 @@ def d_train_batch(device, dataloader, g, d, optimizer, X):
 def train_epoch(device, dataloader, g, d, g_optimizer, d_optimizer):
     for i, (X, _) in enumerate(dataloader):
         d_train_batch(device, dataloader, g, d, d_optimizer, X)
-        if i > 0 and i % CRITIC_ITERS == 0:
+
+        if isinstance(g, GeneratorWGAN) and isinstance(d, DiscriminatorWGAN):  # use CRITIC_ITERS
+            if i > 0 and i % DISCRIMINATOR_ITERATIONS == 0:
+                g_train_batch(device, dataloader, g, d, g_optimizer)
+        else:  # train generator after every iteration of the discriminator
             g_train_batch(device, dataloader, g, d, g_optimizer)
 
 
-def test_iteration(device, dataloader, g, d):
+def test_epoch(device, dataloader, g, d):
     g.eval()
     d.eval()
 
