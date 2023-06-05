@@ -7,7 +7,7 @@ from torchvision import datasets
 from torchvision.transforms import ToTensor
 
 from models import GeneratorWGAN, GeneratorDCGAN, DiscriminatorWGAN, DiscriminatorDCGAN
-from trainer import train_models, plot_samples, plot_one_sample
+from trainer import train_models, plot_g_samples, plot_one_g_sample, plot_samples
 
 BATCH_SIZE = 64
 EPOCHS = 200
@@ -67,22 +67,24 @@ def update_models(dataloader, g, d, epochs, use_saved_weights):
 
 def main():
     dataloader = load_data(datasets.FashionMNIST)
+    plot_samples(next(iter(dataloader))[0], 'Real samples')
+    plot_samples(next(iter(dataloader))[0][0], 'Real sample')
+    plot_samples(next(iter(dataloader))[0][0], 'Real sample')
 
     g = GeneratorWGAN(DIM, Z_SIZE).to(device)
     d = DiscriminatorWGAN(DIM).to(device)
     wgan_d_loss = update_models(dataloader, g, d, EPOCHS, use_saved_weights=False)
-    plot_samples(device, g, 'W-GAN')
-    plot_one_sample(device, g, 'W-GAN')
+    plot_g_samples(device, g, 'W-GAN')
+    plot_one_g_sample(device, g, 'W-GAN')
 
-    exit()
     print('#' * 50)
     print()
 
     g = GeneratorDCGAN(DIM, Z_SIZE).to(device)
     d = DiscriminatorDCGAN(DIM).to(device)
     dcgan_d_loss = update_models(dataloader, g, d, EPOCHS, use_saved_weights=False)
-    plot_samples(device, g, 'DC-GAN')
-    plot_one_sample(device, g, 'DC-GAN')
+    plot_g_samples(device, g, 'DC-GAN')
+    plot_one_g_sample(device, g, 'DC-GAN')
 
     plot_loss(wgan_d_loss, dcgan_d_loss)
 

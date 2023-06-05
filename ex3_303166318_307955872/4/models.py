@@ -36,19 +36,19 @@ class Generator(nn.Module):
             x = self.bn2(x)
         x = relu(x)
 
-        x = x[:, :, :7, :7]  # TODO remove this comment
+        x = x[:, :, :7, :7]
 
         x = self.deconv2(x)
         if self.mode == 'WGAN':
             x = self.bn3(x)
         x = relu(x)
 
-        x = x[:, :, :14, :14]  # TODO remove this comment
+        x = x[:, :, :14, :14]
 
         x = self.deconv3(x)
         x = sigmoid(x)
 
-        x = x[:, :, :28, :28]  # TODO remove this comment
+        x = x[:, :, :28, :28]
 
         return torch.reshape(x, (-1, OUTPUT_DIM))
 
