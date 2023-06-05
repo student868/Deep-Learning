@@ -1,4 +1,4 @@
-<h1>Deep Learning - Ex.3</h1>
+<h1>Deep Learning - Ex.3 Question 3</h1>
 
 The code is written using pytorch and is divided to several files:
 
@@ -12,10 +12,12 @@ The code is written using pytorch and is divided to several files:
 - Fashion MNIST
 
 Tips:
-- For each dataset you can choose between training and evaluate saved model. 
-- If you want to overwrite the saved model uncomment "torch.save" call in "evaluate_model" function in "main.py" and train the model (<b>Warning:</b> the saved model will be deleted).
+- For each dataset you can choose between training and evaluating a saved model. 
+- If you want to overwrite the saved model uncomment "torch.save" call in "train" function in "main.py" and train the model (<b>Warning:</b> the saved model will be deleted).
 
 <b>main.py </b> - load the data and call training and testing functions.
+
+<b>models.py </b>- class of the VAE.
 
 <b>trainer.py </b>- model & train & test implementation.
 
