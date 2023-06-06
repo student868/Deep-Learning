@@ -71,20 +71,20 @@ def main():
     plot_samples(next(iter(dataloader))[0][0], 'Real sample')
     plot_samples(next(iter(dataloader))[0][0], 'Real sample')
 
-    g = GeneratorWGAN(DIM, Z_SIZE).to(device)
-    d = DiscriminatorWGAN(DIM).to(device)
-    wgan_d_loss = update_models(dataloader, g, d, EPOCHS, use_saved_weights=False)
-    plot_g_samples(device, g, 'W-GAN')
-    plot_one_g_sample(device, g, 'W-GAN')
+    wgan_g = GeneratorWGAN(DIM, Z_SIZE).to(device)
+    wgan_d = DiscriminatorWGAN(DIM).to(device)
+    wgan_d_loss = update_models(dataloader, wgan_g, wgan_d, EPOCHS, use_saved_weights=False)
+    plot_g_samples(device, wgan_g, 'W-GAN')
+    plot_one_g_sample(device, wgan_g, 'W-GAN')
 
     print('#' * 50)
     print()
 
-    g = GeneratorDCGAN(DIM, Z_SIZE).to(device)
-    d = DiscriminatorDCGAN(DIM).to(device)
-    dcgan_d_loss = update_models(dataloader, g, d, EPOCHS, use_saved_weights=False)
-    plot_g_samples(device, g, 'DC-GAN')
-    plot_one_g_sample(device, g, 'DC-GAN')
+    dcgan_g = GeneratorDCGAN(DIM, Z_SIZE).to(device)
+    dcgan_d = DiscriminatorDCGAN(DIM).to(device)
+    dcgan_d_loss = update_models(dataloader, dcgan_g, dcgan_d, EPOCHS, use_saved_weights=False)
+    plot_g_samples(device, dcgan_g, 'DC-GAN')
+    plot_one_g_sample(device, dcgan_g, 'DC-GAN')
 
     plot_loss(wgan_d_loss, dcgan_d_loss)
 
