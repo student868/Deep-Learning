@@ -2,11 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torchvision.utils
+from torch import autograd
 from torch import nn
 
 from models import GeneratorWGAN, DiscriminatorWGAN, GeneratorDCGAN, DiscriminatorDCGAN
 
-DISCRIMINATOR_WEIGHT_CLIP = 0.01
+LAMBDA = 10  # Gradient penalty lambda hyperparameter
 DISCRIMINATOR_ITERATIONS = 5  # For WGAN, number of discriminator iterations per generator iterations
 
 PRINT_EVERY = 500
@@ -16,8 +17,24 @@ def wgan_g_loss_fn(d_score_on_fake):
     return 0 - torch.mean(d_score_on_fake)
 
 
-def wgan_d_loss_fn(d_score_on_fake, d_score_on_real):
-    return -1 * (torch.mean(d_score_on_real) - torch.mean(d_score_on_fake))  # -1 to make maximization problem to minimization problem
+def gradient_penalty(device, d, real_data, fake_data):
+    alpha = torch.rand(real_data.shape[0], 1).to(device)
+
+    differences = fake_data - real_data
+    interpolates = real_data + (alpha * differences)
+    interpolates.requires_grad = True
+
+    d_score_on_interpolates = d(interpolates)
+
+    gradients = autograd.grad(outputs=d_score_on_interpolates, inputs=interpolates,
+                              grad_outputs=torch.ones(d_score_on_interpolates.shape).to(device),
+                              create_graph=True, retain_graph=True)[0]
+    slopes = gradients.norm(2, dim=1)
+    return ((slopes - 1) ** 2).mean()
+
+
+def wgan_d_loss_fn(device, d, real_data, fake_data, d_score_on_fake, d_score_on_real):
+    return -1 * (torch.mean(d_score_on_real) - torch.mean(d_score_on_fake)) + gradient_penalty(device, d, real_data, fake_data) * LAMBDA  # -1 to make maximization problem to minimization problem
 
 
 def dcgan_g_loss_fn(d_score_on_fake):
@@ -30,11 +47,11 @@ def dcgan_d_loss_fn(d_score_on_fake, d_score_on_real):
     return (fake_loss + real_loss) / 2  # from official implementation
 
 
-def g_train_batch(device, dataloader, g, d, optimizer):
+def g_train_batch(device, g, d, batch_size, optimizer):
     g.train()
     d.eval()
 
-    noise = torch.randn((dataloader.batch_size, g.z_size)).to(device)
+    noise = torch.randn((batch_size, g.z_size)).to(device)
     score_on_fake = d(g(noise))
 
     if isinstance(g, GeneratorWGAN):
@@ -72,18 +89,19 @@ def plot_one_g_sample(device, g, title):
     plot_g_samples(device, g, title, n_samples=1)
 
 
-def d_train_batch(device, dataloader, g, d, optimizer, X):
+def d_train_batch(device, g, d, X, optimizer):
     d.train()
     g.eval()
 
-    noise = torch.randn((dataloader.batch_size, g.z_size)).to(device)
-    score_on_fake = d(g(noise).detach())
+    noise = torch.randn((X.shape[0], g.z_size)).to(device)
+    fake_data = g(noise).detach()
+    score_on_fake = d(fake_data)
 
-    X = X.to(device)
+    X = X.to(device).detach()
     score_on_real = d(X)
 
     if isinstance(g, GeneratorWGAN) and isinstance(d, DiscriminatorWGAN):
-        loss = wgan_d_loss_fn(score_on_fake, score_on_real)
+        loss = wgan_d_loss_fn(device, d, X.flatten(1), fake_data, score_on_fake, score_on_real)
     elif isinstance(g, GeneratorDCGAN) and isinstance(d, DiscriminatorDCGAN):
         loss = dcgan_d_loss_fn(score_on_fake, score_on_real)
     else:
@@ -93,18 +111,7 @@ def d_train_batch(device, dataloader, g, d, optimizer, X):
     loss.backward()
     optimizer.step()
 
-    # Weight clipping
-    if isinstance(g, GeneratorWGAN) and isinstance(d, DiscriminatorWGAN):
-        with torch.no_grad():
-            for param in d.parameters():
-                param.clamp_(-DISCRIMINATOR_WEIGHT_CLIP, DISCRIMINATOR_WEIGHT_CLIP)
-
     return loss.item()
-
-
-def init_weights(layer):
-    if isinstance(layer, nn.Linear):
-        nn.init.xavier_normal_(layer.weight)
 
 
 def train_models(device, dataloader, g, d, epochs, g_save_path, d_save_path, save=False):
@@ -114,10 +121,9 @@ def train_models(device, dataloader, g, d, epochs, g_save_path, d_save_path, sav
     d_loss_list = []
 
     if isinstance(g, GeneratorWGAN) and isinstance(d, DiscriminatorWGAN):
-        g.apply(init_weights)
-        d.apply(init_weights)
-        g_optimizer = torch.optim.RMSprop(g.parameters(), lr=5e-5)
-        d_optimizer = torch.optim.RMSprop(d.parameters(), lr=5e-5)
+        betas = (0.5, 0.9)
+        g_optimizer = torch.optim.Adam(g.parameters(), lr=1e-4, betas=betas)
+        d_optimizer = torch.optim.Adam(d.parameters(), lr=1e-4, betas=betas)
     elif isinstance(g, GeneratorDCGAN) and isinstance(d, DiscriminatorDCGAN):
         betas = (0.5, 0.999)
         g_optimizer = torch.optim.Adam(g.parameters(), lr=2e-4, betas=betas)
@@ -127,13 +133,13 @@ def train_models(device, dataloader, g, d, epochs, g_save_path, d_save_path, sav
 
     for epoch in range(epochs):
         for iteration, (X, _) in enumerate(dataloader):
-            d_loss_list.append(d_train_batch(device, dataloader, g, d, d_optimizer, X))
+            d_loss_list.append(d_train_batch(device, g, d, X, d_optimizer))
 
             if isinstance(g, GeneratorWGAN) and isinstance(d, DiscriminatorWGAN):  # use DISCRIMINATOR_ITERATIONS for WGAN
                 if iteration > 0 and iteration % DISCRIMINATOR_ITERATIONS == 0:
-                    g_loss_list.append(g_train_batch(device, dataloader, g, d, g_optimizer))
+                    g_loss_list.append(g_train_batch(device, g, d, X.shape[0], g_optimizer))
             else:  # train generator after every iteration of the discriminator
-                g_loss_list.append(g_train_batch(device, dataloader, g, d, g_optimizer))
+                g_loss_list.append(g_train_batch(device, g, d, X.shape[0], g_optimizer))
 
             if ((iteration + 1) % PRINT_EVERY == 0 or iteration + 1 == len(dataloader)) and (len(g_loss_list) > 0) and (len(d_loss_list) > 0):
                 print("Epoch [{:>4}/{:>4}] Iteration [{:>4}/{:>4}] - Training Loss: (G: {:>+10.5f}, D: {:>+10.5f})".format(
