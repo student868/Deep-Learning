@@ -9,8 +9,8 @@ The code is written using pytorch and is divided to several files:
 2. Train / evaluate saved models by running the functions inside the notebook.
 
 Tips:
-- <b>It is recommended to use a GPU. </b>
-- For each dataset you can choose between training and evaluating a saved model.
+- <b>It is recommended to use a GPU for training new models. </b>
+- If you want to overwrite the saved model pass the parameter "save_trained_model=True" to "update_models" function call (<b>Warning:</b> the saved model will be deleted).
 
 <b>main.py </b> - load the data and call training and testing functions.
 
