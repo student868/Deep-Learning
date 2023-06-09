@@ -34,7 +34,8 @@ def gradient_penalty(device, d, real_data, fake_data):
 
 
 def wgan_d_loss_fn(device, d, real_data, fake_data, d_score_on_fake, d_score_on_real):
-    return -1 * (torch.mean(d_score_on_real) - torch.mean(d_score_on_fake)) + gradient_penalty(device, d, real_data, fake_data) * LAMBDA  # -1 to make maximization problem to minimization problem
+    return -1 * (torch.mean(d_score_on_real) - torch.mean(d_score_on_fake)) + gradient_penalty(device, d, real_data, fake_data) * LAMBDA
+    # -1 to make maximization problem to minimization problem
 
 
 def dcgan_g_loss_fn(d_score_on_fake):
@@ -89,19 +90,19 @@ def plot_one_g_sample(device, g, title):
     plot_g_samples(device, g, title, n_samples=1)
 
 
-def d_train_batch(device, g, d, X, optimizer):
+def d_train_batch(device, g, d, real_data, optimizer):
     d.train()
     g.eval()
 
-    noise = torch.randn((X.shape[0], g.z_size)).to(device)
+    noise = torch.randn((real_data.shape[0], g.z_size)).to(device)
     fake_data = g(noise).detach()
     score_on_fake = d(fake_data)
 
-    X = X.to(device).detach()
-    score_on_real = d(X)
+    real_data = real_data.to(device).detach()
+    score_on_real = d(real_data)
 
     if isinstance(g, GeneratorWGAN) and isinstance(d, DiscriminatorWGAN):
-        loss = wgan_d_loss_fn(device, d, X.flatten(1), fake_data, score_on_fake, score_on_real)
+        loss = wgan_d_loss_fn(device, d, real_data.flatten(1), fake_data, score_on_fake, score_on_real)
     elif isinstance(g, GeneratorDCGAN) and isinstance(d, DiscriminatorDCGAN):
         loss = dcgan_d_loss_fn(score_on_fake, score_on_real)
     else:
@@ -135,7 +136,7 @@ def train_models(device, dataloader, g, d, epochs, g_save_path, d_save_path, sav
         for iteration, (X, _) in enumerate(dataloader):
             d_loss_list.append(d_train_batch(device, g, d, X, d_optimizer))
 
-            if isinstance(g, GeneratorWGAN) and isinstance(d, DiscriminatorWGAN):  # use DISCRIMINATOR_ITERATIONS for WGAN
+            if isinstance(g, GeneratorWGAN) and isinstance(d, DiscriminatorWGAN):  # use DISCRIMINATOR_ITERATIONS
                 if iteration > 0 and iteration % DISCRIMINATOR_ITERATIONS == 0:
                     g_loss_list.append(g_train_batch(device, g, d, X.shape[0], g_optimizer))
             else:  # train generator after every iteration of the discriminator
@@ -143,7 +144,7 @@ def train_models(device, dataloader, g, d, epochs, g_save_path, d_save_path, sav
 
             if ((iteration + 1) % PRINT_EVERY == 0 or iteration + 1 == len(dataloader)) and (len(g_loss_list) > 0) and (len(d_loss_list) > 0):
                 print("Epoch [{:>4}/{:>4}] Iteration [{:>4}/{:>4}] - Training Loss: (G: {:>+10.5f}, D: {:>+10.5f})".format(
-                    epoch + 1, epochs, iteration + 1, len(dataloader), g_loss_list[-1], d_loss_list[-1]))  # fix g_loss_list is empty for printevery = 1
+                    epoch + 1, epochs, iteration + 1, len(dataloader), g_loss_list[-1], d_loss_list[-1]))
 
         plot_g_samples(device, g, g.mode + ' Samples - Epoch #' + str(epoch + 1))
 

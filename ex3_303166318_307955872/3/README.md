@@ -4,8 +4,8 @@ The code is written using pytorch and is divided to several files:
 
 <b>notebook.ipynb </b> - Jupyter notebook for calling functions from main.py. Usage:
 
-1. Load imports
-- <b>Notice:</b> scipts, models and data are downloaded from our Github, because mounting from google drive on a shared folder made us problems, nevertheless, all the files are identical to those in the drive if you want to copy them and mount (you can verify that the last commit of the folder was made before the submission date).
+1. Load imports.
+<br /><b>Notice:</b> scripts, models and data are downloaded from our GitHub, because mounting from Google Drive on a shared folder made us problems, nevertheless, all the files are identical to those in the drive if you want to copy them and mount (you can verify that the last commit of the folder was made before the submission date).
 2. Train / evaluate saved model by running one of the following functions as instructed:
 
 - MNIST
@@ -27,6 +27,6 @@ Tips:
 
 
 Sources:
-- [Semi-supervised Learning with Deep Generative Models](https://arxiv.org/abs/1406.5298)
+- [Semi-supervised Learning with Deep Generative Models (Paper)](https://arxiv.org/abs/1406.5298)
 - [Official implementation](https://github.com/dpkingma/nips14-ssl/blob/master/gpulearn_z_x.py)
 - [VAE Tutorial](https://sannaperzon.medium.com/paper-summary-variational-autoencoders-with-pytorch-implementation-1b4b23b1763a)

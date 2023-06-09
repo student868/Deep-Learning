@@ -60,7 +60,8 @@ def update_models(dataloader, g, d, epochs, use_saved_weights, save_trained_mode
     if use_saved_weights and (os.path.exists(g_save_path) and os.path.exists(d_save_path)):
         load_models(g, d, g_save_path, d_save_path)
     else:
-        g_loss_list, d_loss_list = train_models(device, dataloader, g, d, epochs, g_save_path, d_save_path, save=save_trained_model)
+        g_loss_list, d_loss_list = train_models(device, dataloader, g, d, epochs, g_save_path, d_save_path,
+                                                save=save_trained_model)
 
     return d_loss_list
 
