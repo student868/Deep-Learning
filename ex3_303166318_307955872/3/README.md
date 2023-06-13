@@ -13,7 +13,7 @@ The code is written using pytorch and is divided to several files:
 
 Tips:
 - For each dataset you can choose between training and evaluating a saved model. 
-- If you want to overwrite the saved model uncomment "torch.save" call in "train" function in "main.py" and train the model (<b>Warning:</b> the saved model will be deleted).
+- If you want to overwrite the saved model pass the parameter "save=True" to "update_nn" and "update_svm" function calls (<b>Warning:</b> the saved models will be deleted).
 
 <b>main.py </b> - load the data and call training and testing functions.
 
